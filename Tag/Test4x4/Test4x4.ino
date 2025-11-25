@@ -11,18 +11,17 @@ const float SAFE_MAX_X = 3.5;
 const float SAFE_MIN_Y = 0.5;
 const float SAFE_MAX_Y = 3.5;
 
-// Optimierte Parameter - BESTE KOMBINATION
 const float TAG_HEIGHT = 1.75;              
-const float FILTER_ALPHA = 0.60;            // Kleiner = glatter (20%)
-const float HYST = 0.10;                    // 20 cm Hysterese
-const unsigned long ALARM_ON_DELAY = 10;   // 500ms draußen → Alarm AN
-const unsigned long ALARM_OFF_DELAY = 10;  // 300ms drinnen → Alarm AUS
+const float FILTER_ALPHA = 0.60;            // Kleiner = glatter 
+const float HYST = 0.10;                    // Hysterese
+const unsigned long ALARM_ON_DELAY = 10;  
+const unsigned long ALARM_OFF_DELAY = 10;  
 const unsigned long SIGNAL_TIMEOUT = 3000;  
 
 // Qualitätsprüfung
 const float MIN_DIST = 0.1;                 
 const float MAX_DIST = 20.0;                
-const float MAX_JUMP = 1.5;                 // Max 1.5m Positions-Sprung
+const float MAX_JUMP = 1.5;                 
 
 // Messdaten
 float dist2D[4] = { 0, 0, 0, 0 };
@@ -41,7 +40,7 @@ unsigned long timeFirstInside = 0;
 // Gefilterte Position
 float xFilt = ROOM_SIZE / 2.0;
 float yFilt = ROOM_SIZE / 2.0;
-bool posValid = false;  // Flag: Haben wir schon eine echte Position?
+bool posValid = false; 
 
 void setup() {
   Serial.begin(115200);
@@ -55,9 +54,6 @@ void setup() {
   pinMode(VIBRO_PIN, OUTPUT);
   digitalWrite(VIBRO_PIN, LOW);
 
-  Serial.println("╔════════════════════════════════════════════════════╗");
-  Serial.println("║      ULTRA-STABILER UWB POSITIONS-TRACKER         ║");
-  Serial.println("╚════════════════════════════════════════════════════╝");
   Serial.println("Glättung: " + String(FILTER_ALPHA, 2));
   Serial.println("Hysterese: " + String(HYST * 100, 0) + " cm");
   Serial.println("Alarm AN Verzögerung: " + String(ALARM_ON_DELAY) + " ms");
@@ -74,7 +70,7 @@ void loop() {
     if (vibrationActive) {
       digitalWrite(VIBRO_PIN, LOW);
       vibrationActive = false;
-      Serial.println("⏱️  Signal-Timeout – System zurückgesetzt");
+      Serial.println("Signal-Timeout – System zurückgesetzt");
     }
     potentialOutside = false;
     potentialInside = false;
@@ -112,7 +108,7 @@ void newRange() {
       range2D = 0.1;  // Wenn Tag tiefer als erwartet
     }
 
-    // WICHTIG: Initialisierung beim ersten Wert (verhindert Sprünge)
+    // Initialisierung beim ersten Wert (verhindert Sprünge)
     if (!hasData[idx]) {
       dist2D[idx] = range2D;  // Sofort übernehmen
       hasData[idx] = true;
@@ -124,7 +120,6 @@ void newRange() {
     lastUpdate = millis();
     checkQuadrat();
 
-    // Kompakte Ausgabe
     Serial.print("A");
     Serial.print(idx + 1);
     Serial.print(":");
@@ -184,7 +179,7 @@ void checkQuadrat() {
   float xRaw = xSum / combos;
   float yRaw = ySum / combos;
 
-  // Ausreißer-Erkennung: NUR wenn wir schon eine valide Position haben!
+  // Ausreißer-Erkennung
   if (posValid) {
     float dx = xRaw - xFilt;
     float dy = yRaw - yFilt;
@@ -198,7 +193,7 @@ void checkQuadrat() {
       return;
     }
   } else {
-    // Erste Position → direkt übernehmen ohne Sprung-Check
+    // Erste Position 
     Serial.println();
     Serial.print("✓ Erste Position initialisiert: (");
     Serial.print(xRaw, 2);
@@ -215,18 +210,16 @@ void checkQuadrat() {
   xFilt = (1.0 - FILTER_ALPHA) * xFilt + FILTER_ALPHA * xRaw;
   yFilt = (1.0 - FILTER_ALPHA) * yFilt + FILTER_ALPHA * yRaw;
 
-  // --- STATE MACHINE MIT DOPPELTER VERZÖGERUNG ---
-
   bool currentlyOutside = false;
 
   if (vibrationActive) {
-    // Bereits Alarm → muss DEUTLICH drinnen sein (mit Hysterese)
+    // Bereits Alarm
     if (xFilt < SAFE_MIN_X + HYST || xFilt > SAFE_MAX_X - HYST ||
         yFilt < SAFE_MIN_Y + HYST || yFilt > SAFE_MAX_Y - HYST) {
       currentlyOutside = true;
     }
   } else {
-    // Kein Alarm → muss DEUTLICH draußen sein
+    // Kein Alarm
     if (xFilt < SAFE_MIN_X - HYST || xFilt > SAFE_MAX_X + HYST ||
         yFilt < SAFE_MIN_Y - HYST || yFilt > SAFE_MAX_Y + HYST) {
       currentlyOutside = true;
@@ -249,13 +242,10 @@ void checkQuadrat() {
         vibrationActive = true;
         digitalWrite(VIBRO_PIN, HIGH);
         Serial.println();
-        Serial.println("╔══════════════════════════════════════╗");
-        Serial.print("║  🔴 ALARM AN (");
+        Serial.print("🔴 ALARM AN ");
         Serial.print(xFilt, 2);
         Serial.print(", ");
         Serial.print(yFilt, 2);
-        Serial.println(")      ║");
-        Serial.println("╚══════════════════════════════════════╝");
       } else {
         Serial.print(" [OUT:");
         Serial.print(elapsed);
@@ -279,13 +269,10 @@ void checkQuadrat() {
         vibrationActive = false;
         digitalWrite(VIBRO_PIN, LOW);
         Serial.println();
-        Serial.println("╔══════════════════════════════════════╗");
-        Serial.print("║  🟢 ALARM AUS (");
+        Serial.print("🟢 ALARM AUS ");
         Serial.print(xFilt, 2);
         Serial.print(", ");
         Serial.print(yFilt, 2);
-        Serial.println(")     ║");
-        Serial.println("╚══════════════════════════════════════╝");
       } else {
         Serial.print(" [IN:");
         Serial.print(elapsed);
