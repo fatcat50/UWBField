@@ -3,7 +3,7 @@
 
 #define VIBRO_PIN 12
 
-// Raumgröße
+// Room Dimensions
 const float ROOM_SIZE = 4.0;
 
 const float SAFE_MIN_X = 0.5;
@@ -11,36 +11,36 @@ const float SAFE_MAX_X = 3.5;
 const float SAFE_MIN_Y = 0.5;
 const float SAFE_MAX_Y = 3.5;
 
-const float TAG_HEIGHT = 1.75;              
-const float FILTER_ALPHA = 0.60;            // Kleiner = glatter 
-const float HYST = 0.10;                    // Hysterese
-const unsigned long ALARM_ON_DELAY = 10;  
-const unsigned long ALARM_OFF_DELAY = 10;  
-const unsigned long SIGNAL_TIMEOUT = 3000;  
+const float TAG_HEIGHT = 1.75;
+const float FILTER_ALPHA = 0.60;  // Smaller = smoother
+const float HYST = 0.10;          // Hysteresis
+const unsigned long ALARM_ON_DELAY = 10;
+const unsigned long ALARM_OFF_DELAY = 10;
+const unsigned long SIGNAL_TIMEOUT = 3000;
 
-// Qualitätsprüfung
-const float MIN_DIST = 0.1;                 
-const float MAX_DIST = 20.0;                
-const float MAX_JUMP = 1.5;                 
+// Quality Check
+const float MIN_DIST = 0.1;
+const float MAX_DIST = 20.0;
+const float MAX_JUMP = 1.5;
 
-// Messdaten
+// Measurement Data
 float dist2D[4] = { 0, 0, 0, 0 };
 bool hasData[4] = { false, false, false, false };
 
-// Status mit Zeitverwaltung
+// Status with timing management
 bool vibrationActive = false;
 unsigned long lastUpdate = 0;
 
-// State Machine für verzögerte Reaktion
+// State machine for delayed reaction
 bool potentialOutside = false;
 bool potentialInside = false;
 unsigned long timeFirstOutside = 0;
 unsigned long timeFirstInside = 0;
 
-// Gefilterte Position
+// Filtered Position
 float xFilt = ROOM_SIZE / 2.0;
 float yFilt = ROOM_SIZE / 2.0;
-bool posValid = false; 
+bool posValid = false;
 
 void setup() {
   Serial.begin(115200);
@@ -54,27 +54,27 @@ void setup() {
   pinMode(VIBRO_PIN, OUTPUT);
   digitalWrite(VIBRO_PIN, LOW);
 
-  Serial.println("Glättung: " + String(FILTER_ALPHA, 2));
-  Serial.println("Hysterese: " + String(HYST * 100, 0) + " cm");
-  Serial.println("Alarm AN Verzögerung: " + String(ALARM_ON_DELAY) + " ms");
-  Serial.println("Alarm AUS Verzögerung: " + String(ALARM_OFF_DELAY) + " ms");
-  Serial.println("Max Sprung: " + String(MAX_JUMP, 1) + " m");
+  Serial.println("Smoothing: " + String(FILTER_ALPHA, 2));
+  Serial.println("Hysteresis: " + String(HYST * 100, 0) + " cm");
+  Serial.println("Alarm ON Delay: " + String(ALARM_ON_DELAY) + " ms");
+  Serial.println("Alarm OFF Delay: " + String(ALARM_OFF_DELAY) + " ms");
+  Serial.println("Max Jump: " + String(MAX_JUMP, 1) + " m");
   Serial.println();
 }
 
 void loop() {
   DW1000Ranging.loop();
 
-  // Timeout → alles zurücksetzen
+  // Timeout -> reset everything
   if (millis() - lastUpdate > SIGNAL_TIMEOUT) {
     if (vibrationActive) {
       digitalWrite(VIBRO_PIN, LOW);
       vibrationActive = false;
-      Serial.println("Signal-Timeout – System zurückgesetzt");
+      Serial.println("Signal Timeout - System Reset");
     }
     potentialOutside = false;
     potentialInside = false;
-    posValid = false;  // Position muss neu initialisiert werden
+    posValid = false;  // Position needs re-initialization
   }
 }
 
@@ -92,28 +92,28 @@ void newRange() {
   else if (addr == 0x84) idx = 3;
 
   if (idx >= 0) {
-    // Qualitätsprüfung der 3D-Distanz
+    // 3D distance quality check
     if (range3D < MIN_DIST || range3D > MAX_DIST) {
       Serial.print("⚠️  A");
       Serial.print(idx + 1);
-      Serial.println(": Ungültige 3D-Distanz ignoriert");
+      Serial.println(": Invalid 3D distance ignored");
       return;
     }
 
-    // Verbesserte 3D → 2D Projektion
+    // Improved 3D -> 2D projection
     float range2D;
     if (range3D > TAG_HEIGHT) {
       range2D = sqrt(range3D * range3D - TAG_HEIGHT * TAG_HEIGHT);
     } else {
-      range2D = 0.1;  // Wenn Tag tiefer als erwartet
+      range2D = 0.1;  // If tag is lower than expected
     }
 
-    // Initialisierung beim ersten Wert (verhindert Sprünge)
+    // Initialize on first value (prevents jumps)
     if (!hasData[idx]) {
-      dist2D[idx] = range2D;  // Sofort übernehmen
+      dist2D[idx] = range2D;  // Apply immediately
       hasData[idx] = true;
     } else {
-      // Exponentielle Glättung der Distanzen
+      // Exponential smoothing of distances
       dist2D[idx] = (1.0 - FILTER_ALPHA) * dist2D[idx] + FILTER_ALPHA * range2D;
     }
 
@@ -134,7 +134,7 @@ void checkQuadrat() {
     if (hasData[i]) validAnchors++;
   if (validAnchors < 3) return;
 
-  // Anchor-Positionen
+  // Anchor positions
   const float ax[4] = { 0, 4, 4, 0 };
   const float ay[4] = { 0, 0, 4, 4 };
 
@@ -160,7 +160,7 @@ void checkQuadrat() {
     float x = (C * E - B * F) / denom;
     float y = (A * F - C * D) / denom;
 
-    // Plausibilitäts-Check: Unmögliche Positionen ignorieren
+    // Plausibility check: Ignore impossible positions
     if (x < -5 || x > 10 || y < -5 || y > 10) return false;
 
     xSum += x;
@@ -179,7 +179,7 @@ void checkQuadrat() {
   float xRaw = xSum / combos;
   float yRaw = ySum / combos;
 
-  // Ausreißer-Erkennung
+  // Outlier detection
   if (posValid) {
     float dx = xRaw - xFilt;
     float dy = yRaw - yFilt;
@@ -187,15 +187,15 @@ void checkQuadrat() {
 
     if (jump > MAX_JUMP) {
       Serial.println();
-      Serial.print("⚠️  Positions-Ausreißer ignoriert (Sprung: ");
+      Serial.print("⚠️  Position outlier ignored (Jump: ");
       Serial.print(jump, 2);
       Serial.println("m)");
       return;
     }
   } else {
-    // Erste Position 
+    // First position
     Serial.println();
-    Serial.print("✓ Erste Position initialisiert: (");
+    Serial.print("✓ First position initialized: (");
     Serial.print(xRaw, 2);
     Serial.print(", ");
     Serial.print(yRaw, 2);
@@ -203,46 +203,44 @@ void checkQuadrat() {
     xFilt = xRaw;
     yFilt = yRaw;
     posValid = true;
-    return;  // Diese Runde keine weitere Verarbeitung
+    return;  // No further processing this round
   }
 
-  // Glättung der Position
+  // Position smoothing
   xFilt = (1.0 - FILTER_ALPHA) * xFilt + FILTER_ALPHA * xRaw;
   yFilt = (1.0 - FILTER_ALPHA) * yFilt + FILTER_ALPHA * yRaw;
 
   bool currentlyOutside = false;
 
   if (vibrationActive) {
-    // Bereits Alarm
-    if (xFilt < SAFE_MIN_X + HYST || xFilt > SAFE_MAX_X - HYST ||
-        yFilt < SAFE_MIN_Y + HYST || yFilt > SAFE_MAX_Y - HYST) {
+    // Alarm already active
+    if (xFilt < SAFE_MIN_X + HYST || xFilt > SAFE_MAX_X - HYST || yFilt < SAFE_MIN_Y + HYST || yFilt > SAFE_MAX_Y - HYST) {
       currentlyOutside = true;
     }
   } else {
-    // Kein Alarm
-    if (xFilt < SAFE_MIN_X - HYST || xFilt > SAFE_MAX_X + HYST ||
-        yFilt < SAFE_MIN_Y - HYST || yFilt > SAFE_MAX_Y + HYST) {
+    // No alarm active
+    if (xFilt < SAFE_MIN_X - HYST || xFilt > SAFE_MAX_X + HYST || yFilt < SAFE_MIN_Y - HYST || yFilt > SAFE_MAX_Y + HYST) {
       currentlyOutside = true;
     }
   }
 
-  // ALARM AKTIVIEREN mit Verzögerung
+  // ACTIVATE ALARM with delay
   if (currentlyOutside && !vibrationActive) {
-    potentialInside = false;  // Reset "Drinnen"-Timer
+    potentialInside = false;  // Reset "Inside" timer
 
     if (!potentialOutside) {
-      // Erster Moment draußen → Timer starten
+      // First moment outside -> start timer
       potentialOutside = true;
       timeFirstOutside = millis();
       Serial.print(" [OUT-Timer Start] ");
     } else {
-      // Immer noch draußen → prüfen wie lange
+      // Still outside -> check duration
       unsigned long elapsed = millis() - timeFirstOutside;
       if (elapsed >= ALARM_ON_DELAY) {
         vibrationActive = true;
         digitalWrite(VIBRO_PIN, HIGH);
         Serial.println();
-        Serial.print("🔴 ALARM AN ");
+        Serial.print("🔴 ALARM ON ");
         Serial.print(xFilt, 2);
         Serial.print(", ");
         Serial.print(yFilt, 2);
@@ -253,23 +251,23 @@ void checkQuadrat() {
       }
     }
   }
-  // ALARM DEAKTIVIEREN mit Verzögerung
+  // DEACTIVATE ALARM with delay
   else if (!currentlyOutside && vibrationActive) {
-    potentialOutside = false;  // Reset "Draußen"-Timer
+    potentialOutside = false;  // Reset "Outside" timer
 
     if (!potentialInside) {
-      // Erster Moment drinnen → Timer starten
+      // First moment inside -> start timer
       potentialInside = true;
       timeFirstInside = millis();
       Serial.print(" [IN-Timer Start] ");
     } else {
-      // Immer noch drinnen → prüfen wie lange
+      // Still inside -> check duration
       unsigned long elapsed = millis() - timeFirstInside;
       if (elapsed >= ALARM_OFF_DELAY) {
         vibrationActive = false;
         digitalWrite(VIBRO_PIN, LOW);
         Serial.println();
-        Serial.print("🟢 ALARM AUS ");
+        Serial.print("🟢 ALARM OFF ");
         Serial.print(xFilt, 2);
         Serial.print(", ");
         Serial.print(yFilt, 2);
@@ -280,13 +278,13 @@ void checkQuadrat() {
       }
     }
   }
-  // Stabil drinnen/draußen → Timer zurücksetzen
+  // Stable inside/outside -> reset timer
   else {
     if (!currentlyOutside) potentialOutside = false;
     if (currentlyOutside) potentialInside = false;
   }
 
-  // Status-Ausgabe
+  // Status output
   Serial.print(" | (");
   Serial.print(xFilt, 2);
   Serial.print(",");
